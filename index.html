@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="sl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Posnetek 8:02–15:55</title>
+<style>
+  :root { --bg:#0e0f12; --panel:#181a20; --fg:#e8e9ec; --muted:#9097a3; --accent:#e5484d; --line:#2a2d35; }
+  * { box-sizing: border-box; }
+  html, body { margin:0; height:100%; background:var(--bg); color:var(--fg);
+    font:15px/1.4 "Segoe UI", system-ui, sans-serif; }
+  .wrap { max-width:1100px; margin:0 auto; padding:20px 16px; display:flex; flex-direction:column; gap:14px; }
+  .bar { display:flex; flex-wrap:wrap; gap:12px; align-items:end; }
+  label { display:flex; flex-direction:column; gap:4px; font-size:12px; color:var(--muted);
+    text-transform:uppercase; letter-spacing:.06em; }
+  input { width:110px; padding:8px 10px; background:var(--panel); color:var(--fg);
+    border:1px solid var(--line); border-radius:6px; font:16px/1 Consolas, monospace; }
+  button { padding:9px 16px; border-radius:6px; border:1px solid var(--line); background:var(--panel);
+    color:var(--fg); font:inherit; cursor:pointer; }
+  button.primary { background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600; }
+  button:focus-visible, input:focus-visible { outline:2px solid var(--fg); outline-offset:2px; }
+  #stage { position:relative; width:100%; aspect-ratio:16/9; background:#000; border-radius:8px; overflow:hidden; }
+  #stage:fullscreen { border-radius:0; aspect-ratio:auto; width:100vw; height:100vh; }
+  #player { position:absolute; inset:0; width:100%; height:100%; }
+  .hint { color:var(--muted); font-size:13px; margin:0; }
+  #status { font-family:Consolas, monospace; color:var(--muted); font-size:13px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="bar">
+    <label for="start">Začetek
+      <input id="start" value="8:02" autocomplete="off">
+    </label>
+    <label for="end">Konec
+      <input id="end" value="15:55" autocomplete="off">
+    </label>
+    <button class="primary" id="go">▶ Predvajaj v celem zaslonu</button>
+    <button id="apply">Uporabi čase</button>
+    <span id="status"></span>
+  </div>
+  <div id="stage"><div id="player"></div></div>
+  <p class="hint">Čase piši kot <b>m:ss</b> (npr. 8:02) ali <b>h:mm:ss</b> (npr. 8:02:00 za 8 ur in 2 minuti).
+    Predvajanje se samo ustavi ob koncu. Iz celega zaslona izstopiš s tipko Esc.</p>
+</div>
+
+<script>
+  const VIDEO_ID = "WNkNaU3MAe8";
+  let player, ready = false, timer = null;
+
+  function parseTime(s) {
+    const parts = String(s).trim().split(":").map(Number);
+    if (!parts.length || parts.some(n => !isFinite(n) || n < 0)) return null;
+    return parts.reduce((acc, n) => acc * 60 + n, 0);
+  }
+  function fmt(sec) {
+    sec = Math.floor(sec);
+    const h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60), s = sec % 60;
+    const mm = h ? String(m).padStart(2, "0") : String(m);
+    return (h ? h + ":" : "") + mm + ":" + String(s).padStart(2, "0");
+  }
+  function range() {
+    const a = parseTime(document.getElementById("start").value);
+    const b = parseTime(document.getElementById("end").value);
+    if (a == null || b == null || b <= a) {
+      document.getElementById("status").textContent = "Konec mora biti za začetkom.";
+      return null;
+    }
+    return { a, b };
+  }
+
+  function onYouTubeIframeAPIReady() {
+    const r = range() || { a: 482, b: 955 };
+    player = new YT.Player("player", {
+      videoId: VIDEO_ID,
+      playerVars: { start: r.a, end: r.b, rel: 0, playsinline: 1, origin: location.origin },
+      events: {
+        onReady: () => { ready = true; status(); },
+        onStateChange: (e) => {
+          if (e.data === YT.PlayerState.PLAYING) watch();
+          if (e.data === YT.PlayerState.ENDED && document.fullscreenElement) document.exitFullscreen();
+        },
+        onError: (e) => {
+          document.getElementById("status").textContent =
+            "YouTube napaka " + e.data + (e.data === 101 || e.data === 150 ? " (lastnik ne dovoli vdelave)" : "");
+        }
+      }
+    });
+  }
+
+  function load(play) {
+    const r = range(); if (!r || !ready) return;
+    const opts = { videoId: VIDEO_ID, startSeconds: r.a, endSeconds: r.b };
+    play ? player.loadVideoById(opts) : player.cueVideoById(opts);
+    status();
+  }
+  function status() {
+    const r = range(); if (!r) return;
+    document.getElementById("status").textContent = fmt(r.a) + " → " + fmt(r.b);
+  }
+  function watch() {
+    clearInterval(timer);
+    timer = setInterval(() => {
+      const r = range(); if (!r || !player.getCurrentTime) return;
+      if (player.getCurrentTime() >= r.b) { player.pauseVideo(); clearInterval(timer); }
+    }, 500);
+  }
+
+  document.getElementById("go").addEventListener("click", async () => {
+    const stage = document.getElementById("stage");
+    try { await stage.requestFullscreen(); } catch (e) {}
+    load(true);
+  });
+  document.getElementById("apply").addEventListener("click", () => load(false));
+</script>
+<script src="https://www.youtube.com/iframe_api"></script>
+</body>
+</html>
